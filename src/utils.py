@@ -24,7 +24,7 @@ def create_args(meta_file, lib_name):
         output_library_short = meta_dict[lib_name]["shortform"],
         reference_genome = meta_dict["genome"]["ref_fasta"],
         reference_genome_twobit = meta_dict["genome"]["ref_twobit"],
-        roi_file = meta_dict["roi"]["roi_sorted"]
+        roi_file = meta_dict["roi"]["sorted"]
     )
 
     args.input_library_filtered_prefix = args.input_library_prefix.replace("raw_data", "filtered")
