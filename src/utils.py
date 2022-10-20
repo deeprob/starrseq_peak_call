@@ -3,6 +3,8 @@ import subprocess
 import json
 from argparse import Namespace
 import pybedtools
+import pandas as pd
+import multiprocessing as mp
 
 
 #### GLOBALS ####
@@ -28,9 +30,6 @@ def create_args(meta_file, lib_name):
         reference_genome_twobit = meta_dict["genome"]["ref_twobit"],
         roi_file = meta_dict["roi"]["sorted"]
     )
-
-    args.input_library_filtered_prefix = args.input_library_prefix.replace("raw_data", "filtered")
-    args.output_library_filtered_prefix = args.output_library_prefix.replace("raw_data", "filtered")
     return args
 
 ###################
@@ -224,9 +223,9 @@ def get_roi_coverage(filtered_bam, roi_sorted_bed, bed_out):
 def get_deseq_compatible_files_from_bed(in_cov_files, out_cov_files, deseq_file):
     # read the bed files
     in_df = pd.concat([pybedtools.BedTool(icf).to_dataframe(disable_auto_names=True, header=None).iloc[:, [0,1,2,-4]].set_index([0,1,2]) for icf in in_cov_files], axis=1)
-    out_df = pd.concat([pybedtools.BedTool(icf).to_dataframe(disable_auto_names=True, header=None).iloc[:, [0,1,2,-4]].set_index([0,1,2]) for ocf in out_cov_files], axis=1)
-    in_df.columns = [f"Input_Rep_{i}" for i in range(1, len(in_bed_files) + 1)]
-    out_df.columns = [f"Output_Rep_{i}" for i in range(1, len(in_bed_files) + 1)]
+    out_df = pd.concat([pybedtools.BedTool(ocf).to_dataframe(disable_auto_names=True, header=None).iloc[:, [0,1,2,-4]].set_index([0,1,2]) for ocf in out_cov_files], axis=1)
+    in_df.columns = [f"Input_Rep_{i}" for i in range(1, len(in_cov_files) + 1)]
+    out_df.columns = [f"Output_Rep_{i}" for i in range(1, len(out_cov_files) + 1)]
     df = pd.concat([in_df, out_df], axis=1)
     df.index = ["_".join(list(map(str, i))) for i in df.index]
     df.index.rename("unique_id", inplace=True)
@@ -234,7 +233,7 @@ def get_deseq_compatible_files_from_bed(in_cov_files, out_cov_files, deseq_file)
     return
 
 def convert_deseq_file_to_bed(deseq_outfile, bed_outdir):
-    df = pd.read_csv(deseq_out)
+    df = pd.read_csv(deseq_outfile)
     df["name"] = df.index
     df = df.reset_index(drop=True)
     df = df.merge(df.name.str.split("_", expand=True).rename(columns={0: "chr", 1: "start", 2: "end"}), left_index=True, right_index=True)
@@ -277,15 +276,16 @@ def call_deseq2_peaks(
     output_library_filtered_bams =  [os.path.join(bam_dir, output_library_short, f"{output_library_prefix}_{rep}.bam") for rep in output_library_replicates.split()]
     input_roi_cov_files = [os.path.join(output_peaks_prefix, f"{input_library_prefix}_{rep}.bed") for rep in input_library_replicates.split()]
     output_roi_cov_files = [os.path.join(output_peaks_prefix, f"{output_library_prefix}_{rep}.bed") for rep in output_library_replicates.split()]
-    cov_iter = [(ib,ic) for ib,ic in zip(input_library_filtered_bams, roi_window_file, input_roi_cov_files)] + [(ob,oc) for ob,oc in zip(output_library_filtered_bams, roi_window_file, output_roi_cov_files)]
+    cov_iter = [(ib, roi_window_file, ic) for ib,ic in zip(input_library_filtered_bams, input_roi_cov_files)] + [(ob, roi_window_file, oc) for ob,oc in zip(output_library_filtered_bams, output_roi_cov_files)]
     run_multiargs_pool_job(get_roi_coverage, cov_iter)
     # create deseq compatible file
     deseq_infile = os.path.join(output_peaks_prefix, "deseq_in.csv")
-    get_deseq_compatible_files_from_bed(input_roi_cov_files, output_roi_cov_files, deseq_in)
+    get_deseq_compatible_files_from_bed(input_roi_cov_files, output_roi_cov_files, deseq_infile)
     # call deseq2 peak call function
     deseq_outfile = os.path.join(output_peaks_prefix, "deseq_out.csv")
     call_deseq2_peaks_helper(deseq_infile, deseq_outfile)
     # convert deseq output to compatible bed file
+    convert_deseq_file_to_bed(deseq_outfile, output_peaks_prefix)
     return
 
 

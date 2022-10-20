@@ -3,7 +3,7 @@ import utils as ut
 
 
 def call_peaks(
-    input_library_filtered_prefix, output_library_filtered_prefix, 
+    input_library_prefix, output_library_prefix, 
     input_library_replicates, output_library_replicates,
     bam_dir, peak_call_dir, 
     input_library_short, output_library_short,
@@ -14,8 +14,8 @@ def call_peaks(
     # starrpeaker peak call
     if starrpeaker_peak_flag:
         ut.call_starrpeaker_peaks(
-            input_library_filtered_prefix, 
-            output_library_filtered_prefix,
+            input_library_prefix, 
+            output_library_prefix,
             starrpeaker_data_dir,
             peak_call_dir, output_library_short,
             )
@@ -24,33 +24,28 @@ def call_peaks(
         # create bigwig files from filtered bam files, required for cradle
         if bigwig_peak_flag:
             ut.create_bigwig(
-                input_library_filtered_prefix, input_library_replicates,
-                output_library_filtered_prefix, output_library_replicates
+                input_library_prefix, input_library_replicates,
+                output_library_prefix, output_library_replicates
                 )
         ut.call_cradle_peaks(
-            input_library_filtered_prefix, input_library_replicates,
-            output_library_filtered_prefix, output_library_replicates,
+            input_library_prefix, input_library_replicates,
+            output_library_prefix, output_library_replicates,
             reference_genome_twobit, roi_file, cradle_data_dir,
             peak_call_dir, output_library_short
             )
     # macs2 peak call
     if macs2_peak_flag:
         ut.call_macs2_peaks(
-            input_library_filtered_prefix, 
-            output_library_filtered_prefix,
+            input_library_prefix, 
+            output_library_prefix,
             peak_call_dir, 
             output_library_short,
             )
-    # TODO: deseq2 peak call
-    # TODO: split master list into windows,
-    # TODO: get coverage of the windows using pybedtools, 
-    # TODO: create deseq2 compatible file::unique_id rep1 rep2 rep3
-    # TODO: run deseq2
-    # TODO: convert active regions to bed compatible format logfc>0 and qvalue<0.01
+    # deseq2 peak call
     if deseq2_peak_flag:
         ut.call_deseq2_peaks(
-        input_library_filtered_prefix, input_library_replicates,
-        output_library_filtered_prefix, output_library_replicates,
+        input_library_prefix, input_library_replicates,
+        output_library_prefix, output_library_replicates,
         roi_file, bam_dir, peak_call_dir, 
         input_library_short, output_library_short            
         )
@@ -58,8 +53,8 @@ def call_peaks(
     # starrpeaker replicate peak call
     if replicate_peak_flag:
         ut.call_starrpeaker_peaks_for_each_replicate(
-            input_library_filtered_prefix, input_library_replicates, 
-            output_library_filtered_prefix, output_library_replicates,
+            input_library_prefix, input_library_replicates, 
+            output_library_prefix, output_library_replicates,
             starrpeaker_data_dir,
             peak_call_dir,
             output_library_short
@@ -86,8 +81,8 @@ if __name__ == "__main__":
     cli_args = parser.parse_args()
     lib_args = ut.create_args(cli_args.meta_file, cli_args.lib)
     call_peaks(
-        lib_args.input_library_filtered_prefix,
-        lib_args.output_library_filtered_prefix,
+        lib_args.input_library_prefix,
+        lib_args.output_library_prefix,
         lib_args.input_library_reps,
         lib_args.output_library_reps, 
         cli_args.bam_dir,

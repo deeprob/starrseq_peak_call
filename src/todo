@@ -1,4 +1,5 @@
-1. add deseq2 peak call
-2. shell scripts name changed
+0. compatiblity of existing peak calling methods with new meta file format
+1. add deseq2 peak call - done
+2. shell scripts name change
 3. bigwig file creation - done 
 4. cradle peak call fix - done
