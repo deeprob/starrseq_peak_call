@@ -2,6 +2,8 @@ import os
 import subprocess
 import json
 from argparse import Namespace
+import pybedtools
+
 
 #### GLOBALS ####
 CURRENT_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -184,3 +186,123 @@ def call_macs2_peaks(
     # call macs2 peak call function
     call_macs2_peaks_helper(output_peaks_prefix, input_library_filtered_bam, output_library_filtered_bam)
     return
+
+
+#################
+# deseq2 helpers #
+#################
+
+def make_windows(in_bed, out_bed, window_size=500, window_stride=50):
+    """
+    Break the ROIs into fragments of an user defined window size and stride
+    """
+    window = pybedtools.BedTool().window_maker(b=in_bed ,w=window_size, s=window_stride)
+    window_df = window.to_dataframe()
+    # get rid of windows which have the same end point
+    last_end = None
+    rows_to_omit = []
+    for i, row in enumerate(window_df.itertuples()):
+        if row.end == last_end:
+            rows_to_omit.append(i)
+        last_end = row.end
+    window_df = window_df.loc[~window_df.index.isin(rows_to_omit)]
+    os.makedirs(os.path.dirname(out_bed), exist_ok=True)
+    window_df.to_csv(out_bed, sep="\t", header=None, index=None)
+    return
+
+def get_roi_coverage(filtered_bam, roi_sorted_bed, bed_out):
+    """
+    Calculates the coverage of each region in the roi file by looking at the bam file
+    """
+    bam = pybedtools.BedTool(filtered_bam)
+    roi = pybedtools.BedTool(roi_sorted_bed)
+    c = roi.coverage(bam)
+    os.makedirs(os.path.dirname(bed_out), exist_ok=True)
+    c.moveto(bed_out)
+    return
+
+def get_deseq_compatible_files_from_bed(in_cov_files, out_cov_files, deseq_file):
+    # read the bed files
+    in_df = pd.concat([pybedtools.BedTool(icf).to_dataframe(disable_auto_names=True, header=None).iloc[:, [0,1,2,-4]].set_index([0,1,2]) for icf in in_cov_files], axis=1)
+    out_df = pd.concat([pybedtools.BedTool(icf).to_dataframe(disable_auto_names=True, header=None).iloc[:, [0,1,2,-4]].set_index([0,1,2]) for ocf in out_cov_files], axis=1)
+    in_df.columns = [f"Input_Rep_{i}" for i in range(1, len(in_bed_files) + 1)]
+    out_df.columns = [f"Output_Rep_{i}" for i in range(1, len(in_bed_files) + 1)]
+    df = pd.concat([in_df, out_df], axis=1)
+    df.index = ["_".join(list(map(str, i))) for i in df.index]
+    df.index.rename("unique_id", inplace=True)
+    df.to_csv(deseq_file, index=True, header=True)
+    return
+
+def convert_deseq_file_to_bed(deseq_outfile, bed_outdir):
+    df = pd.read_csv(deseq_out)
+    df["name"] = df.index
+    df = df.reset_index(drop=True)
+    df = df.merge(df.name.str.split("_", expand=True).rename(columns={0: "chr", 1: "start", 2: "end"}), left_index=True, right_index=True)
+    df["strand"] = "."
+    df = df.loc[:, ["chr", "start", "end", "name", "strand", "stat", "log2FoldChange", "baseMean", "lfcSE", "pvalue", "padj"]]
+    df_active_peaks = df.loc[(df["log2FoldChange"]>0)&(df["padj"]<0.05)]
+    df_active_peaks_file = os.path.join(bed_outdir, "peaks.bed")
+    df_active_peaks.to_csv(df_active_peaks_file, index=False, header=False, sep="\t")
+    df_active_peaks_file_merged = os.path.join(bed_outdir, "peaks.merged.bed")
+    df_active_peaks_bed = pybedtools.BedTool.from_dataframe(df_active_peaks)
+    df_active_peaks_merged_bed = df_active_peaks_bed.merge(c=[7, 10, 11], o=["max", "min", "min"])
+    df_active_peaks_merged_bed.moveto(df_active_peaks_file_merged)
+    return
+
+
+# deseq2 peak calling functions
+def call_deseq2_peaks_helper(infile, outfile):
+    cmd = ["bash", f"{CURRENT_DIR_PATH}/shell_scripts/1d_call_peaks_deseq2.sh", 
+            f"{infile}", 
+            f"{outfile}"]
+    subprocess.run(cmd)
+    return
+
+def call_deseq2_peaks(
+    input_library_prefix, input_library_replicates,
+    output_library_prefix, output_library_replicates,
+    roi_file, bam_dir, peak_call_dir, 
+    input_library_short, output_library_short
+    ):
+    """
+    Call peaks for output library using deseq2
+    """
+    # create the output peaks path where it will be stored
+    output_peaks_prefix = get_peak_dir_path(peak_call_dir, output_library_short, "", "deseq2")
+    # break the roi file into windows
+    roi_window_file = os.path.join(output_peaks_prefix, "roi_windows.bed")
+    make_windows(roi_file, roi_window_file)
+    # calculate coverage of the roi regions 
+    input_library_filtered_bams =  [os.path.join(bam_dir, input_library_short, f"{input_library_prefix}_{rep}.bam") for rep in input_library_replicates.split()]
+    output_library_filtered_bams =  [os.path.join(bam_dir, output_library_short, f"{output_library_prefix}_{rep}.bam") for rep in output_library_replicates.split()]
+    input_roi_cov_files = [os.path.join(output_peaks_prefix, f"{input_library_prefix}_{rep}.bed") for rep in input_library_replicates.split()]
+    output_roi_cov_files = [os.path.join(output_peaks_prefix, f"{output_library_prefix}_{rep}.bed") for rep in output_library_replicates.split()]
+    cov_iter = [(ib,ic) for ib,ic in zip(input_library_filtered_bams, roi_window_file, input_roi_cov_files)] + [(ob,oc) for ob,oc in zip(output_library_filtered_bams, roi_window_file, output_roi_cov_files)]
+    run_multiargs_pool_job(get_roi_coverage, cov_iter)
+    # create deseq compatible file
+    deseq_infile = os.path.join(output_peaks_prefix, "deseq_in.csv")
+    get_deseq_compatible_files_from_bed(input_roi_cov_files, output_roi_cov_files, deseq_in)
+    # call deseq2 peak call function
+    deseq_outfile = os.path.join(output_peaks_prefix, "deseq_out.csv")
+    call_deseq2_peaks_helper(deseq_infile, deseq_outfile)
+    # convert deseq output to compatible bed file
+    return
+
+
+################
+# multiprocess #
+################
+
+def run_singleargs_pool_job(pool_function, pool_iter):
+    pool = mp.Pool(len(pool_iter))
+    results = pool.map(pool_function, pool_iter)
+    pool.close()
+    pool.join()
+    return results
+
+def run_multiargs_pool_job(pool_function, pool_iter):
+    pool = mp.Pool(len(pool_iter))
+    results = pool.starmap(pool_function, pool_iter)
+    pool.close()
+    pool.join()
+    return results

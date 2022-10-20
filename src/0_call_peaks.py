@@ -5,10 +5,11 @@ import utils as ut
 def call_peaks(
     input_library_filtered_prefix, output_library_filtered_prefix, 
     input_library_replicates, output_library_replicates,
-    peak_call_dir, output_library_short,
+    bam_dir, peak_call_dir, 
+    input_library_short, output_library_short,
     reference_genome_twobit, roi_file,
     starrpeaker_data_dir, cradle_data_dir,
-    starrpeaker_peak_flag, bigwig_peak_flag, cradle_peak_flag, macs2_peak_flag, replicate_peak_flag
+    starrpeaker_peak_flag, bigwig_peak_flag, cradle_peak_flag, macs2_peak_flag, deseq2_peak_flag, replicate_peak_flag
     ):
     # starrpeaker peak call
     if starrpeaker_peak_flag:
@@ -40,6 +41,20 @@ def call_peaks(
             peak_call_dir, 
             output_library_short,
             )
+    # TODO: deseq2 peak call
+    # TODO: split master list into windows,
+    # TODO: get coverage of the windows using pybedtools, 
+    # TODO: create deseq2 compatible file::unique_id rep1 rep2 rep3
+    # TODO: run deseq2
+    # TODO: convert active regions to bed compatible format logfc>0 and qvalue<0.01
+    if deseq2_peak_flag:
+        ut.call_deseq2_peaks(
+        input_library_filtered_prefix, input_library_replicates,
+        output_library_filtered_prefix, output_library_replicates,
+        roi_file, bam_dir, peak_call_dir, 
+        input_library_short, output_library_short            
+        )
+
     # starrpeaker replicate peak call
     if replicate_peak_flag:
         ut.call_starrpeaker_peaks_for_each_replicate(
@@ -56,6 +71,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="STARRSeq analysis")
     parser.add_argument("meta_file", type=str, help="The meta json filepath where library information is stored")
     parser.add_argument("lib", type=str, help="The library name as given in the meta file")
+    parser.add_argument("bam_dir", type=str, help="Directory where the bam files are stored")
     parser.add_argument("peak_call_dir", type=str, help="The root dir where called peaks will be stored")
     parser.add_argument("starrpeaker_data_dir", type=str, help="Starrpeaker required files data dir")
     parser.add_argument("cradle_data_dir", type=str, help="Cradle required files data dir")
@@ -63,6 +79,7 @@ if __name__ == "__main__":
     parser.add_argument("-b", "--bigwig", action="store_true", help="Create bigwig files")
     parser.add_argument("-c", "--cradle", action="store_true", help="Run cradle pipeline")
     parser.add_argument("-m", "--macs", action="store_true", help="Run macs2 pipeline")
+    parser.add_argument("-d", "--deseq", action="store_true", help="Run deseq2 pipeline")
     parser.add_argument("-r", "--rep_peaks", action="store_true", help="Run starrpeaker pipeline and call replicate peaks")
     parser.add_argument("-t", "--threads", type=int, help="number of threads to use", default=64) # TODO: include threads in main argument
 
@@ -73,7 +90,9 @@ if __name__ == "__main__":
         lib_args.output_library_filtered_prefix,
         lib_args.input_library_reps,
         lib_args.output_library_reps, 
+        cli_args.bam_dir,
         cli_args.peak_call_dir,
+        lib_args.input_library_short,
         lib_args.output_library_short,
         lib_args.reference_genome_twobit,
         lib_args.roi_file,
@@ -83,5 +102,6 @@ if __name__ == "__main__":
         cli_args.bigwig,
         cli_args.cradle,
         cli_args.macs,
+        cli_args.deseq,
         cli_args.rep_peaks,      
         )
