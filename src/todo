@@ -1,5 +1,13 @@
 0. compatiblity of existing peak calling methods with new meta file format
+    - starrpeaker - done
+    - bigwig - done
+    - cradle - 
+    - macs2 - done
+    - deseq2 - done
 1. add deseq2 peak call - done
-2. shell scripts name change
+2. shell scripts name change - done
 3. bigwig file creation - done 
 4. cradle peak call fix - done
+5. if there are no rois, create roi by counting unique fragments - done
+6. metadata file for starrpeaker instead of dir - 
+7. metadata file for cradle instead of dir - done

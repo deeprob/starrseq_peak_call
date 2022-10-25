@@ -29,19 +29,16 @@ input=$2
 #starrseq output file
 output=$3
 
-# starrpeaker preprocessing files dir
-starrdir=$4
-
 # chromosome sizes file
-chromsize="${starrdir}GRCh38.chrom.sizes.simple.sorted" 
+chromsize=$4 
 
 # blacklist regions file
-blacklist="${starrdir}ENCODE_blacklist_GRCh38_ENCFF419RSJ_merged.bed"
+blacklist=$5
 
 # covariate files
-cov1="${starrdir}covariates/STARRPeaker_cov_GRCh38_gem-mappability-100mer.bw"
-cov2="${starrdir}covariates/STARRPeaker_cov_GRCh38_ucsc-gc-5bp.bw"
-cov3="${starrdir}covariates/STARRPeaker_cov_GRCh38_linearfold-folding-energy-100bp.bw"
+cov1=$6
+cov2=$7
+cov3=$8
 
 # starrpeaker peak calling command
 starrpeaker --prefix $prefix --chromsize $chromsize --blacklist $blacklist --cov $cov1 $cov2 $cov3 -i $input -o $output

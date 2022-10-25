@@ -20,7 +20,7 @@ unset __conda_setup
 conda activate cradle
 
 # get all arguments
-while getopts i:o:p:r:g:c:s: flag
+while getopts i:o:p:r:g:x:y:l:m:q: flag
 do
     case "${flag}" in
         i) INPUT_BWS=(${OPTARG});;
@@ -28,30 +28,23 @@ do
         p) PEAKDIR=${OPTARG};;
         r) ROIFILE=${OPTARG};;
         g) GENOMEFILE=${OPTARG};;
-        c) CRADLE_DATADIR=${OPTARG};;
-        s) OUT_SHORTFORM=${OPTARG};;
+        x) IN_PREFIX=${OPTARG};;
+        y) OUT_PREFIX=${OPTARG};;
+        l) BLACKLIST=${OPTARG};;
+        m) MAPFILE=${OPTARG};;
+        q) GQUADFILE=${OPTARG};;
     esac
 done
 
-# blacklist regions file
-blacklist="${CRADLE_DATADIR}ENCODE_blacklist_GRCh38_ENCFF419RSJ_merged.bed"
-
-# mappability bias file
-mapfile="${CRADLE_DATADIR}mappability/hg38_mappability_100mer.bw" 
-# gquad bias file
-gquadfile="${CRADLE_DATADIR}gquadruplex/GSE63874_Na_K_PDS_plus_hits_intersect_hg38_uniq_K.bw"
-
-# covariate directory stored file
-cov_dir="${CRADLE_DATADIR}hg38_fragLen500_kmer100"
 
 # cradle correctBias command
-cradle correctBias -ctrlbw ${INPUT_BWS[@]} -expbw ${OUTPUT_BWS[@]} -l 500 -r ${ROIFILE} -biasType shear pcr map gquad -genome ${GENOMEFILE} -bl ${blacklist} -p 64 -o ${PEAKDIR} -kmer 100 -mapFile $mapfile -gquadFile $gquadfile
+cradle correctBias -ctrlbw ${INPUT_BWS[@]} -expbw ${OUTPUT_BWS[@]} -l 500 -r ${ROIFILE} -biasType shear pcr map gquad -genome ${GENOMEFILE} -bl ${BLACKLIST} -p 64 -o ${PEAKDIR} -kmer 100 -mapFile $MAPFILE -gquadFile $GQUADFILE
 
 # cradle correctBias_stored command
 # cradle correctBias_stored -ctrlbw ${input1}.bw ${input2}.bw ${input3}.bw -expbw ${output1}.bw ${output2}.bw ${output3}.bw -r ${ROIFILE} -biasType shear pcr map gquad -genome ${GENOMEFILE} -bl $blacklist -p 64 -o $outprefix_corrected -covariDir $cov_dir
 
-input_corrected_bws=($(find $PEAKDIR -name "Input*corrected.bw" | sort)) # assumes input file prefix starts with "Input"
-output_corrected_bws=($(find $PEAKDIR -name "${OUT_SHORTFORM}*corrected.bw" | sort))
+input_corrected_bws=($(find $PEAKDIR -name "${IN_PREFIX}*corrected.bw" | sort)) 
+output_corrected_bws=($(find $PEAKDIR -name "${OUT_PREFIX}*corrected.bw" | sort))
 
 echo ${input_corrected_bws[@]}
 # # cradle peakcall command

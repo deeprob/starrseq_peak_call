@@ -22,6 +22,9 @@ conda activate starrseq-da
 
 infile=$1
 outfile=$2
+inreps=$3
+outreps=$4
+
 echo $PWD
 
-Rscript /data5/deepro/starrseq/main_library/3_peak_call/src/shell_scripts/deseq2.R $infile $outfile
+Rscript /data5/deepro/starrseq/main_library/3_peak_call/src/shell_scripts/deseq2.R $infile $outfile $inreps $outreps
