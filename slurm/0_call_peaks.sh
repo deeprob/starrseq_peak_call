@@ -10,7 +10,7 @@
 #SBATCH -o /data5/deepro/starrseq/main_library/3_peak_call/slurm/logs/out_%a.log
 #SBATCH -e /data5/deepro/starrseq/main_library/3_peak_call/slurm/logs/err_%a.log
 #SBATCH --exclude=ramona,durga
-#SBATCH --array 10
+#SBATCH --array 10-11
 
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!

@@ -17,7 +17,7 @@ def call_peaks(
     if not roi_file:
         input_bam = os.path.join(bam_dir, input_library_short, f"{input_library_prefix}.bam")
         roi_file = os.path.join(peak_call_dir, output_library_short, "roi_file.bed")
-        # ut.get_unique_fragments(input_bam, uniq_frag_bed)
+        ut.get_unique_fragments(input_bam, uniq_frag_bed)
 
     # starrpeaker peak call
     if starrpeaker_peak_flag:

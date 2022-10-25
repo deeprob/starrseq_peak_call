@@ -352,17 +352,17 @@ def call_deseq2_peaks(
     output_peaks_prefix = get_peak_dir_path(peak_call_dir, output_library_short, "", "deseq2")
     # break the roi file into windows
     roi_window_file = os.path.join(output_peaks_prefix, "roi_windows.bed")
-    # make_windows(roi_file, roi_window_file)
+    make_windows(roi_file, roi_window_file)
     # calculate coverage of the roi regions 
     input_library_filtered_bams =  [os.path.join(bam_dir, input_library_short, f"{input_library_prefix}_{rep}.bam") for rep in input_library_replicates.split()]
     output_library_filtered_bams =  [os.path.join(bam_dir, output_library_short, f"{output_library_prefix}_{rep}.bam") for rep in output_library_replicates.split()]
     input_roi_cov_files = [os.path.join(output_peaks_prefix, f"{input_library_prefix}_{rep}.bed") for rep in input_library_replicates.split()]
     output_roi_cov_files = [os.path.join(output_peaks_prefix, f"{output_library_prefix}_{rep}.bed") for rep in output_library_replicates.split()]
     cov_iter = [(ib, roi_window_file, ic) for ib,ic in zip(input_library_filtered_bams, input_roi_cov_files)] + [(ob, roi_window_file, oc) for ob,oc in zip(output_library_filtered_bams, output_roi_cov_files)]
-    # run_multiargs_pool_job(get_roi_coverage, cov_iter)
+    run_multiargs_pool_job(get_roi_coverage, cov_iter)
     # create deseq compatible file
     deseq_infile = os.path.join(output_peaks_prefix, "deseq_in.csv")
-    # get_deseq_compatible_files_from_bed(input_roi_cov_files, output_roi_cov_files, deseq_infile)
+    get_deseq_compatible_files_from_bed(input_roi_cov_files, output_roi_cov_files, deseq_infile)
     # call deseq2 peak call function
     deseq_outfile = os.path.join(output_peaks_prefix, "deseq_out.csv")
     call_deseq2_peaks_helper(deseq_infile, deseq_outfile, len(input_library_filtered_bams), len(output_library_filtered_bams))
