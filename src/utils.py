@@ -5,6 +5,7 @@ from argparse import Namespace
 import pybedtools
 import pandas as pd
 import multiprocessing as mp
+from pybedtools.featurefuncs import greater_than
 
 
 #### GLOBALS ####
@@ -76,10 +77,8 @@ def get_unique_fragments(in_bam, out_bed):
     Breaks the genome into non-overlapping windows
     """
     # convert bam to bed
-    uniq_frag_bed = pybedtools.BedTool().bam_to_bed(i=in_bam)
-    # keep only first three columns :: due to downstream issues
-    uniq_frag_bed = pybedtools.BedTool.from_dataframe(uniq_frag_bed.to_dataframe().iloc[:, [0,1,2]])
-    uniq_frag_bed = uniq_frag_bed.sort().merge()
+    uniq_frag_bed = pybedtools.BedTool().merge(i=in_bam)
+    os.makedirs(os.path.dirname(out_bed), exist_ok=True)
     uniq_frag_bed.moveto(out_bed)
     return
 
@@ -201,11 +200,12 @@ def call_cradle_peaks_helper(
     blacklist = arg_dict["blacklist"]
     cov_mappability = arg_dict["cov_mappability"]
     cov_gquad = arg_dict["cov_gquad"]
+    stored_cov_dir = arg_dict["stored_cov_dir"]
 
     cmd = ["bash", f"{CURRENT_DIR_PATH}/shell_scripts/1b_1_call_peaks_cradle.sh"]
     cmd += ["-i", f"{input_bigwigs}", "-o", f"{output_bigwigs}", "-p", peak_call_dir]
     cmd += ["-r", roi_file, "-g", reference_genome_twobit, "-x", input_library_prefix, "-y", output_library_prefix]
-    cmd += ["-l", blacklist, "-m", cov_mappability, "-q", cov_gquad]
+    cmd += ["-l", blacklist, "-m", cov_mappability, "-q", cov_gquad, "-s", stored_cov_dir]
     subprocess.run(cmd)   
     return
 
@@ -287,13 +287,26 @@ def make_windows(in_bed, out_bed, window_size=500, window_stride=50):
     window_df.to_csv(out_bed, sep="\t", header=None, index=None)
     return
 
+def make_windows_faster(in_bed, out_bed, window_size=500, window_stride=50):
+    """
+    Break the ROIs into fragments of an user defined window size and stride
+    """
+    window_new = pybedtools.BedTool().window_maker(b=in_bed, w=window_size, s=window_stride)
+    # only keep windows of length greater than w-s-1
+    window_new_filtered = window_new.filter(greater_than, window_size-window_stride-1)
+    window_new_filtered.saveas(out_bed)
+    return
+
 def get_roi_coverage(filtered_bam, roi_sorted_bed, bed_out):
     """
     Calculates the coverage of each region in the roi file by looking at the bam file
     """
     bam = pybedtools.BedTool(filtered_bam)
     roi = pybedtools.BedTool(roi_sorted_bed)
-    c = roi.coverage(bam)
+    try:
+        c = roi.coverage(bam, sorted=True)
+    except Exception as e:
+        c = roi.coverage(bam)
     os.makedirs(os.path.dirname(bed_out), exist_ok=True)
     c.moveto(bed_out)
     return
@@ -352,14 +365,14 @@ def call_deseq2_peaks(
     output_peaks_prefix = get_peak_dir_path(peak_call_dir, output_library_short, "", "deseq2")
     # break the roi file into windows
     roi_window_file = os.path.join(output_peaks_prefix, "roi_windows.bed")
-    make_windows(roi_file, roi_window_file)
+    make_windows_faster(roi_file, roi_window_file)
     # calculate coverage of the roi regions 
     input_library_filtered_bams =  [os.path.join(bam_dir, input_library_short, f"{input_library_prefix}_{rep}.bam") for rep in input_library_replicates.split()]
     output_library_filtered_bams =  [os.path.join(bam_dir, output_library_short, f"{output_library_prefix}_{rep}.bam") for rep in output_library_replicates.split()]
     input_roi_cov_files = [os.path.join(output_peaks_prefix, f"{input_library_prefix}_{rep}.bed") for rep in input_library_replicates.split()]
     output_roi_cov_files = [os.path.join(output_peaks_prefix, f"{output_library_prefix}_{rep}.bed") for rep in output_library_replicates.split()]
     cov_iter = [(ib, roi_window_file, ic) for ib,ic in zip(input_library_filtered_bams, input_roi_cov_files)] + [(ob, roi_window_file, oc) for ob,oc in zip(output_library_filtered_bams, output_roi_cov_files)]
-    run_multiargs_pool_job(get_roi_coverage, cov_iter)
+    run_multiargs_pool_job(get_roi_coverage, cov_iter, threads=8)
     # create deseq compatible file
     deseq_infile = os.path.join(output_peaks_prefix, "deseq_in.csv")
     get_deseq_compatible_files_from_bed(input_roi_cov_files, output_roi_cov_files, deseq_infile)
@@ -375,15 +388,19 @@ def call_deseq2_peaks(
 # multiprocess #
 ################
 
-def run_singleargs_pool_job(pool_function, pool_iter):
-    pool = mp.Pool(len(pool_iter))
+def run_singleargs_pool_job(pool_function, pool_iter, threads=None):
+    if not threads:
+        threads = len(pool_iter)
+    pool = mp.Pool(threads)
     results = pool.map(pool_function, pool_iter)
     pool.close()
     pool.join()
     return results
 
-def run_multiargs_pool_job(pool_function, pool_iter):
-    pool = mp.Pool(len(pool_iter))
+def run_multiargs_pool_job(pool_function, pool_iter, threads=None):
+    if not threads:
+        threads = len(pool_iter)
+    pool = mp.Pool(threads)
     results = pool.starmap(pool_function, pool_iter)
     pool.close()
     pool.join()

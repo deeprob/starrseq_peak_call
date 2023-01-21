@@ -17,28 +17,17 @@ unset __conda_setup
 # <<< conda initialize <<<
 
 # activate conda environment
-conda activate starrpeaker
+conda activate starrseq
 
-## Get file paths to required arguments ##
-# Prefix to store peaks
-prefix=$1
+IN_BAM=$1
+OUT_BED=$2
 
-# starrseq input file
-input=$2
+# convert bam to bed
+bedtools bamtobed -i ${IN_BAM} > ${OUT_BED}
+# keep only first three columns
+cut -f 1,3 -d \t ${OUT_BED} > ${OUT_BED}_tmp
+# sort the bed file
+bedtools sort -i ${OUT_BED}_tmp > ${OUT_BED}
 
-#starrseq output file
-output=$3
-
-# chromosome sizes file
-chromsize=$4 
-
-# blacklist regions file
-blacklist=$5
-
-# covariate files
-cov1=$6
-cov2=$7
-cov3=$8
-
-# starrpeaker peak calling command
-starrpeaker --prefix $prefix --chromsize $chromsize --blacklist $blacklist -i $input -o $output --cov $cov1 $cov2 $cov3 
+mv ${OUT_BED}_tmp ${OUT_BED}
+# sort the bed file
